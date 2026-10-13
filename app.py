@@ -1,13 +1,19 @@
-# app.py 상단 수정 예시
 import streamlit as st
 from dotenv import load_dotenv
 
 from core.graph import app_graph
 from core.tools import export_report_to_notion
-from auth import render_auth_sidebar  # auth 모듈 임포트
+from auth import render_auth_sidebar, get_current_profile
 
+# ------------------------------------------------------------------------------
+# 1. 페이지 기본 설정 및 초기화
+# ------------------------------------------------------------------------------
 load_dotenv()
-st.set_page_config(page_title="So-What Agent | 실무 전략 부사수", page_icon="🧭", layout="wide")
+st.set_page_config(
+    page_title="So-What Agent | 실무 전략 부사수",
+    page_icon="🧭",
+    layout="wide"
+)
 
 # 사이드바 인증 게이트 렌더링 (사번, thread_id, 인증여부 반환)
 user_id, thread_id, is_authenticated = render_auth_sidebar()
@@ -15,41 +21,84 @@ user_id, thread_id, is_authenticated = render_auth_sidebar()
 # 인증 미완료 시 메인 화면 차단
 if not is_authenticated:
     st.header("🧭 So-What Agent: 비즈니스 동향 보고서 생성")
-    st.warning("👈 좌측 사이드바에서 사번을 입력하고 [인증 및 세션 생성]을 진행해주세요.")
+    st.info("👈 좌측 사이드바에서 **[데모 프리셋]**을 선택하거나 **[AI 자동 프로파일링]**을 통해 로그인해 주세요.")
     st.stop()
 
+# 세션 상태 기본값 초기화
+if "app_phase" not in st.session_state:
+    st.session_state.app_phase = "INPUT"
+if "graph_state" not in st.session_state:
+    st.session_state.graph_state = {}
+if "notion_url" not in st.session_state:
+    st.session_state.notion_url = None
+
+# 현재 인증된 SME 프로필 조회 (Sprint 6-2)
+current_profile = get_current_profile()
+company_name = current_profile.get("company", "자사 조직")
+domain_bm = current_profile.get("domain_bm", "비즈니스 도메인")
+constraints_info = current_profile.get("constraints", "사내 인프라 및 예산 제약")
+kpi_info = current_profile.get("kpi", "핵심 목표 KPI")
+
+
 # ==============================================================================
-# [화면 1] 지시 접수 및 4대 앵커 입력 화면
+# [화면 1] 지시 접수 및 자사 맥락 주입 화면 (Sprint 6-2)
 # ==============================================================================
 if st.session_state.app_phase == "INPUT":
     st.header("🧭 So-What Agent: 비즈니스 동향 보고서 생성")
     st.markdown("상사의 모호한 구두 지시나 실무 자연어 넋두리를 입력하면, 실질 팩트만 걸러내 **1장 SCQA 전략 보고서** 초안을 작성합니다.")
 
-    if not st.session_state.user_id:
-        st.warning("👈 좌측 사이드바에서 먼저 사번을 입력하고 인증을 완료해주세요.")
-        st.stop()
+    # 🏢 [Sprint 6-2] 자사 비즈니스 맥락 3대 요소 인지용 안내 배지
+    st.markdown(f"""
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 13px; font-weight: 700; color: #1e293b;">
+                🏢 현재 적용 중인 자사 맥락: <span style="color: #2563eb;">{company_name}</span> | <span style="color: #475569; font-weight: 500;">{domain_bm}</span>
+            </span>
+            <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">
+                SME 자동 주입 모드
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; display: flex; gap: 16px; flex-wrap: wrap;">
+            <span>🔒 <b>인프라 제약:</b> {constraints_info}</span>
+            <span>📈 <b>목표 KPI:</b> {kpi_info}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     with st.form("input_form"):
         raw_query = st.text_area(
             "상사 지시문 또는 실무 넋두리 (1~2줄)",
-            placeholder="예: 타사 물류 AI 배차 자동화 도입한다는데, 우리 레거시 시스템 연동 비용이랑 실제 물류비 절감 지표 위주로 파악해봐.",
+            placeholder="예: 타사 AI 마케팅 개인화 솔루션 도입한다는데, 우리 쇼핑몰 호스팅 환경 연동 비용이랑 실제 ROAS 개선 지표 위주로 파악해봐.",
             height=120
         )
-        submit_btn = st.form_submit_button("🚀 비즈니스 팩트 수집 및 목차 생성 시작", use_container_width=True)
+        submit_btn = st.form_submit_button("🚀 비즈니스 팩트 수집 및 목차 생성 시작", use_container_width=True, type="primary")
 
     if submit_btn and raw_query.strip():
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
+
+        # [Sprint 6-2] 자사 맥락 3요소를 지시문에 자연스럽게 합성하고 initial_state에 비파괴 주입
+        enriched_query = f"""[소속 기업: {company_name} | 사업 영역: {domain_bm}]
+[인프라/리소스 제약: {constraints_info}]
+[집중 관리 KPI: {kpi_info}]
+[실무자 지시문]: {raw_query.strip()}"""
+
         initial_input = {
             "user_id": st.session_state.user_id,
-            "raw_query": raw_query.strip(),
+            "raw_query": enriched_query,
+            "company_context": {
+                "company": company_name,
+                "domain_bm": domain_bm,
+                "constraints": constraints_info,
+                "kpi": kpi_info
+            },
             "search_retry_count": 0,
             "human_choice": None
         }
 
         with st.status("🔍 외부 시장 데이터 수집 및 가설 도출 중...", expanded=True) as status:
-            st.write("1. 넋두리 분석 및 4대 앵커(KPI, 제약, 태도, 앵글) 추출 중...")
-            
-            # LangGraph 실행 (interrupt_before=["human_gate"] 지점까지 진행)
+            st.write("1. 넋두리 분석 및 4대 앵커(KPI, 자사 제약, 태도, 앵글) 추출 중...")
+
+            # LangGraph 실행 (interrupt_before=["human_gate"] 지점까지 자동 진행)
             for event in app_graph.stream(initial_input, config=config):
                 for node_name, state_update in event.items():
                     if node_name == "parse_and_anchor":
@@ -68,6 +117,7 @@ if st.session_state.app_phase == "INPUT":
             st.session_state.app_phase = "HITL"
             status.update(label="✅ 목차 설계 완료! 승인 대기 중", state="complete", expanded=False)
             st.rerun()
+
 
 # ==============================================================================
 # [화면 2 & 3] HITL 목차 검토 및 3-Way 분기 화면
@@ -105,7 +155,7 @@ elif st.session_state.app_phase == "HITL":
     with btn_col1:
         if st.button("✅ 목차 승인 및 보고서 작성", type="primary", use_container_width=True):
             updated_outline = [edited_o1, edited_o2, edited_o3]
-            
+
             # 사용자 수정 목차 및 승인 분기 State에 주입
             app_graph.update_state(
                 config,
@@ -131,7 +181,7 @@ elif st.session_state.app_phase == "HITL":
         if st.button("🔄 앵글 피벗 (재검색 없이 롤백)", use_container_width=True):
             updated_anchors = dict(anchors)
             updated_anchors["angle"] = new_angle
-            
+
             # 앵글 수정 주입 및 Time-Travel 롤백
             app_graph.update_state(
                 config,
@@ -153,6 +203,7 @@ elif st.session_state.app_phase == "HITL":
             st.session_state.graph_state = {}
             st.rerun()
 
+
 # ==============================================================================
 # [화면 4] 최종 1장 SCQA 보고서 열람 및 노션 전송 화면
 # ==============================================================================
@@ -160,6 +211,9 @@ elif st.session_state.app_phase == "REPORT":
     st.header("📄 최종 비즈니스 동향 보고서 (1-Page Brief)")
     state = st.session_state.graph_state
     report_text = state.get("final_report", "생성된 보고서가 없습니다.")
+
+    # 상단 메타 브리핑 배지
+    st.caption(f"🏢 대상 기업: **{company_name}** | 🎯 적용 앵글: **{state.get('anchors', {}).get('angle', '-')}** | 📊 팩트: **{len(state.get('filtered_articles', []))}건**")
 
     # 마크다운 보고서 렌더링 카드
     st.markdown(report_text)
