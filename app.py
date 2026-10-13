@@ -144,7 +144,7 @@ user_id, thread_id, is_authenticated = render_auth_sidebar()
 # 인증 미완료 시 메인 화면 차단
 if not is_authenticated:
     st.header("🧭 So-What Agent: 비즈니스 동향 보고서 생성")
-    st.info("👈 좌측 사이드바에서 **[데모 프리셋]**을 선택하거나 **[AI 자동 프로파일링]**을 통해 로그인해 주세요.")
+    st.info("👈 좌측 사이드바에서 **[브랜드명] + [공식 URL] + [당면 과제]**를 입력하고 **[세션 생성 및 전략 분석 시작]**을 진행해 주세요.")
     st.stop()
 
 # 세션 상태 기본값 초기화
@@ -196,7 +196,7 @@ if st.session_state.app_phase == "INPUT":
     with st.form("input_form"):
         raw_query = st.text_area(
             "상사 지시문 또는 실무 넋두리 (1~2줄)",
-            placeholder="예: 타사 AI 마케팅 개인화 솔루션 도입한다는데, 우리 쇼핑몰 호스팅 환경 연동 비용이랑 실제 ROAS 개선 지표 위주로 파악해봐.",
+            placeholder="예: 젝시믹스나 안다르 등 타사 요가 레깅스 상세페이지에서 구매 전환율(CVR)을 끌어올린 프로모션 및 후기 배치 전략 조사해봐.",
             height=120
         )
         submit_btn = st.form_submit_button("🚀 비즈니스 팩트 수집 및 목차 생성 시작", use_container_width=True, type="primary")
