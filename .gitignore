@@ -1,0 +1,20 @@
+# 가상환경
+venv/
+.venv/
+env/
+
+# 파이썬 캐시 & 바이트코드
+__pycache__/
+*.py[cod]
+
+# 보안 및 환경변수 (절대 커밋 금지)
+.env
+
+# LangGraph 로컬 체크포인터 DB (Phase 6 SqliteSaver 적용 시)
+*.db
+project_state.db
+
+# OS / IDE 파일
+.DS_Store
+.vscode/
+.idea/
