@@ -84,6 +84,82 @@ class TestAuthSprint6(unittest.TestCase):
         self.assertEqual(result["constraints"], DEFAULT_SME_FALLBACK["constraints"])
         self.assertEqual(result["kpi"], DEFAULT_SME_FALLBACK["kpi"])
 
+    def test_detect_ecommerce_platform_smartstore(self):
+        """네이버 스마트스토어 감지 및 브랜드명 선택 기입(유/무) 검증"""
+        from auth import detect_ecommerce_platform
+
+        # 1. 브랜드명 기입한 경우
+        res1 = detect_ecommerce_platform("https://smartstore.naver.com/yogastore", "요가천국")
+        self.assertEqual(res1["platform_type"], "NAVER_SMARTSTORE")
+        self.assertEqual(res1["brand_name"], "요가천국")
+        self.assertTrue(validate_employee_id(res1["user_id"])[0])
+
+        # 2. 브랜드명 비워둔 경우 (URL에서 스토어 ID 자동 추출)
+        res2 = detect_ecommerce_platform("https://smartstore.naver.com/yogastore", "")
+        self.assertEqual(res2["platform_type"], "NAVER_SMARTSTORE")
+        self.assertEqual(res2["brand_name"], "스토어(YOGASTORE)")
+        self.assertTrue(validate_employee_id(res2["user_id"])[0])
+
+    def test_detect_ecommerce_platform_coupang(self):
+        """쿠팡 마켓플레이스 감지 및 브랜드명 선택 기입(유/무) 검증"""
+        from auth import detect_ecommerce_platform
+
+        # 1. 브랜드명 기입한 경우
+        res1 = detect_ecommerce_platform("https://www.coupang.com/vp/products/123", "로켓셀러A")
+        self.assertEqual(res1["platform_type"], "COUPANG")
+        self.assertEqual(res1["brand_name"], "로켓셀러A")
+        self.assertTrue(validate_employee_id(res1["user_id"])[0])
+
+        # 2. 브랜드명 비워둔 경우 (안전 폴백 상호 지정)
+        res2 = detect_ecommerce_platform("https://www.coupang.com/vp/products/123", "")
+        self.assertEqual(res2["platform_type"], "COUPANG")
+        self.assertEqual(res2["brand_name"], "쿠팡 파트너몰")
+        self.assertTrue(validate_employee_id(res2["user_id"])[0])
+
+    def test_detect_ecommerce_platform_d2c(self):
+        """일반 독립 D2C 자사몰 감지 및 도메인 기반 상호 추출 검증"""
+        from auth import detect_ecommerce_platform
+
+        # 1. 브랜드명 기입한 경우
+        res1 = detect_ecommerce_platform("https://www.xexymix.com", "젝시믹스")
+        self.assertEqual(res1["platform_type"], "GENERAL_D2C")
+        self.assertEqual(res1["brand_name"], "젝시믹스")
+        self.assertTrue(validate_employee_id(res1["user_id"])[0])
+
+        # 2. 브랜드명 비워둔 경우 (도메인 호스트에서 상호 자동 추출)
+        res2 = detect_ecommerce_platform("https://www.xexymix.com", "")
+        self.assertEqual(res2["platform_type"], "GENERAL_D2C")
+        self.assertEqual(res2["brand_name"], "XEXYMIX")
+        self.assertTrue(validate_employee_id(res2["user_id"])[0])
+
+    def test_diagnose_ecommerce_report_type(self):
+        """이커머스 4대 표준 보고서 자동 진단기 검증 (Sprint 6-2)"""
+        from auth import diagnose_ecommerce_report_type
+
+        # 1. CVR 상세페이지 전환율
+        r_cvr = diagnose_ecommerce_report_type("레깅스 상세페이지 후기 배치 및 구매 전환율 개선")
+        self.assertEqual(r_cvr["type_key"], "CVR")
+        self.assertEqual(r_cvr["title"], "상세페이지 구매 전환율(CVR) 극대화 전략 보고서")
+
+        # 2. AOV 객단가 번들 세트
+        r_aov = diagnose_ecommerce_report_type("추석 선물세트 묶음 판매 및 객단가 상승 프로모션")
+        self.assertEqual(r_aov["type_key"], "AOV")
+        self.assertEqual(r_aov["title"], "객단가(AOV) 상승을 위한 번들 및 세트 구성 전략 보고서")
+
+        # 3. ROAS 광고 효율
+        r_roas = diagnose_ecommerce_report_type("메타 인스타 피드 광고 소재별 ROAS 성과 분석")
+        self.assertEqual(r_roas["type_key"], "ROAS")
+        self.assertEqual(r_roas["title"], "소재별 광고 효율(ROAS) 최적화 전략 보고서")
+
+        # 4. CRM 리텐션 재구매
+        r_crm = diagnose_ecommerce_report_type("첫구매 유저 카카오 알림톡 발송 및 재구매 쿠폰 설계")
+        self.assertEqual(r_crm["type_key"], "CRM")
+        self.assertEqual(r_crm["title"], "첫 구매 고객 재구매 유도(CRM/리텐션) 전략 보고서")
+
+        # 5. 폴백 (모호한 지시문)
+        r_fallback = diagnose_ecommerce_report_type("요즘 장사가 잘 안 되는데 어쩌지?")
+        self.assertEqual(r_fallback["type_key"], "CVR")
+
 
 if __name__ == "__main__":
     unittest.main()

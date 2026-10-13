@@ -3,7 +3,12 @@ from dotenv import load_dotenv
 
 from core.graph import app_graph
 from core.tools import export_report_to_notion
-from auth import render_auth_sidebar, get_current_profile
+from auth import (
+    render_auth_sidebar,
+    get_current_profile,
+    diagnose_ecommerce_report_type,
+    ECOMMERCE_REPORT_TYPES,
+)
 
 # ------------------------------------------------------------------------------
 # 1. 페이지 기본 설정 및 디자인 테마 CSS 주입
@@ -96,15 +101,15 @@ def render_stepper(active_step_idx: int, container=None):
     """
     상단 4단계 Stepper UI 컴포넌트 렌더링 (Sprint 6-3)
     active_step_idx:
-      1: 지시 접수
-      2: 팩트 수집/검증
-      3: 목차 컨펌 (HITL)
+      1: 고민 접수
+      2: 커머스 팩트 수집
+      3: 목차 컨펌
       4: 보고서 완성
     """
     steps = [
-        (1, "1. 지시 접수"),
-        (2, "2. 팩트 수집/검증"),
-        (3, "3. 목차 컨펌(HITL)"),
+        (1, "1. 고민 접수"),
+        (2, "2. 커머스 팩트 수집"),
+        (3, "3. 목차 컨펌"),
         (4, "4. 보고서 완성"),
     ]
 
@@ -144,7 +149,7 @@ user_id, thread_id, is_authenticated = render_auth_sidebar()
 # 인증 미완료 시 메인 화면 차단
 if not is_authenticated:
     st.header("🧭 So-What Agent: 비즈니스 동향 보고서 생성")
-    st.info("👈 좌측 사이드바에서 **[브랜드명] + [공식 URL] + [당면 과제]**를 입력하고 **[세션 생성 및 전략 분석 시작]**을 진행해 주세요.")
+    st.info("👈 좌측 사이드바에서 **쇼핑몰 URL (필수)**을 입력하고 **[세션 생성 및 전략 분석 시작]**을 진행해 주세요. (브랜드명은 비워두셔도 자동 추출됩니다)")
     st.stop()
 
 # 세션 상태 기본값 초기화
@@ -156,6 +161,8 @@ if "pivot_version" not in st.session_state:
     st.session_state.pivot_version = 0
 if "notion_url" not in st.session_state:
     st.session_state.notion_url = None
+if "diagnosed_report" not in st.session_state:
+    st.session_state.diagnosed_report = None
 
 # 현재 인증된 SME 프로필 전역 스코프 조회 (Sprint 6-2 & 6-3 안정화)
 current_profile = get_current_profile()
@@ -172,7 +179,7 @@ if st.session_state.app_phase == "INPUT":
     stepper_placeholder = st.empty()
     render_stepper(1, container=stepper_placeholder)
 
-    st.header("🧭 So-What Agent: 비즈니스 동향 보고서 생성")
+    st.header("🧭 So-What Agent: 이커머스 전략 보고서 생성")
     st.markdown("상사의 모호한 구두 지시나 실무 자연어 넋두리를 입력하면, 실질 팩트만 걸러내 **1장 SCQA 전략 보고서** 초안을 작성합니다.")
 
     # 🏢 자사 비즈니스 맥락 3대 요소 인지용 안내 배지
@@ -183,7 +190,7 @@ if st.session_state.app_phase == "INPUT":
                 🏢 현재 적용 중인 자사 맥락: <span style="color: #2563eb;">{company_name}</span> | <span style="color: #475569; font-weight: 500;">{domain_bm}</span>
             </span>
             <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">
-                SME 자동 주입 모드
+                이커머스 SME 자동 주입
             </span>
         </div>
         <div style="font-size: 12px; color: #64748b; display: flex; gap: 16px; flex-wrap: wrap;">
@@ -193,21 +200,45 @@ if st.session_state.app_phase == "INPUT":
     </div>
     """, unsafe_allow_html=True)
 
+    # [Sprint 6-2] 4대 이커머스 표준 보고서 퀵 가이드 안내
+    st.markdown("""
+    <div style="margin-bottom: 12px;">
+        <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
+            💡 이커머스 실무 4대 표준 보고서 추천 예시
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    g_col1, g_col2, g_col3, g_col4 = st.columns(4)
+    with g_col1:
+        st.caption("🎯 **상세페이지 CVR**\n'상세페이지 후기/옵션 배치 및 구매 전환율 개선'")
+    with g_col2:
+        st.caption("📦 **객단가(AOV) 번들**\n'세트 묶음 구성 및 합배송 기준 객단가 상승 전략'")
+    with g_col3:
+        st.caption("📈 **광고 효율(ROAS)**\n'메타/인스타 피드 광고 소재별 성과 및 ROAS 개선'")
+    with g_col4:
+        st.caption("💌 **리텐션(CRM)**\n'카카오 알림톡 및 첫 구매 고객 재구매 유도 쿠폰'")
+
     with st.form("input_form"):
         raw_query = st.text_area(
             "상사 지시문 또는 실무 넋두리 (1~2줄)",
             placeholder="예: 젝시믹스나 안다르 등 타사 요가 레깅스 상세페이지에서 구매 전환율(CVR)을 끌어올린 프로모션 및 후기 배치 전략 조사해봐.",
-            height=120
+            height=110
         )
         submit_btn = st.form_submit_button("🚀 비즈니스 팩트 수집 및 목차 생성 시작", use_container_width=True, type="primary")
 
     if submit_btn and raw_query.strip():
+        # [Sprint 6-2] 지시문 기반 4대 표준 보고서 자동 진단
+        diagnosed = diagnose_ecommerce_report_type(raw_query.strip(), domain_bm)
+        st.session_state.diagnosed_report = diagnosed
+
         # [2. 수집 및 정제 단계] 상단 Stepper를 즉시 [✅ 1. 지시 접수] ──▶ [🔵 2. 팩트 수집/검증]으로 동적 전환!
         render_stepper(2, container=stepper_placeholder)
 
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
         enriched_query = f"""[소속 기업: {company_name} | 사업 영역: {domain_bm}]
+[진단 보고서 유형: {diagnosed['title']}]
 [인프라/리소스 제약: {constraints_info}]
 [집중 관리 KPI: {kpi_info}]
 [실무자 지시문]: {raw_query.strip()}"""
@@ -218,6 +249,7 @@ if st.session_state.app_phase == "INPUT":
             "company_context": {
                 "company": company_name,
                 "domain_bm": domain_bm,
+                "diagnosed_report_title": diagnosed["title"],
                 "constraints": constraints_info,
                 "kpi": kpi_info
             },
@@ -226,20 +258,21 @@ if st.session_state.app_phase == "INPUT":
         }
 
         with st.status("🔍 외부 시장 데이터 수집 및 가설 도출 중...", expanded=True) as status:
-            st.write("1. 넋두리 분석 및 4대 앵커(KPI, 자사 제약, 태도, 앵글) 추출 중...")
+            st.write(f"1. 넋두리 분석 -> 🏷️ **[{diagnosed['title']}]** 진단 완료")
+            st.write("2. 4대 앵커(KPI, 자사 제약, 태도, 앵글) 추출 및 타깃 검색 쿼리 구성 중...")
 
             # LangGraph 실행 (interrupt_before=["human_gate"] 지점까지 자동 진행)
             for event in app_graph.stream(initial_input, config=config):
                 for node_name, state_update in event.items():
                     if node_name == "parse_and_anchor":
-                        st.write("2. 핵심 앵커 고정 완료 -> Tavily 고속 검색 실행...")
+                        st.write("3. 핵심 앵커 고정 완료 -> Tavily 고속 검색 실행...")
                     elif node_name == "research_and_filter":
                         filtered = state_update.get("filtered_articles", [])
-                        st.write(f"3. HF mDeBERTa 노이즈 필터링 완료 (유효 팩트 {len(filtered)}건 확보)")
+                        st.write(f"4. HF mDeBERTa 노이즈 필터링 완료 (유효 팩트 {len(filtered)}건 확보)")
                     elif node_name == "rewrite_query":
                         st.write("⚠️ 팩트 부족으로 검색 쿼리 확장 재시도 중...")
                     elif node_name == "generate_outline":
-                        st.write("4. 가설 1줄 및 SCQA 3대 목차 설계 완료!")
+                        st.write("5. 가설 1줄 및 SCQA 3대 목차 설계 완료!")
 
             # 인터럽트 상태의 최신 State 확보
             snapshot = app_graph.get_state(config)
@@ -251,13 +284,43 @@ if st.session_state.app_phase == "INPUT":
 
 
 # ==============================================================================
-# [화면 2 & 3] HITL 목차 검토 및 3-Way 분기 화면 (Sprint 6-3 고도화)
+# [화면 2 & 3] HITL 목차 검토 및 3-Way 분기 화면 (Sprint 6-2 & 6-3 고도화)
 # ==============================================================================
 elif st.session_state.app_phase == "HITL":
     render_stepper(3)
 
     st.header("📋 [HITL 게이트] 핵심 가설 및 3대 목차 승인")
     st.info("💡 에이전트가 도출한 가설과 목차를 검토하세요. 목차는 직접 수정할 수 있으며, 앵글 피벗 시 기존 팩트를 보존한 채 목차만 신속하게 재도출합니다.")
+
+    # [Sprint 6-2] 진단된 정식 보고서 유형 배지 렌더링
+    diagnosed = st.session_state.get("diagnosed_report")
+    if diagnosed:
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(90deg, #1e293b, #0f172a);
+            border: 1px solid #334155;
+            border-left: 5px solid {diagnosed['color']};
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px;">
+                    🏷️ 자동 진단된 정식 보고서 유형
+                </span>
+                <span style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 9999px; font-size: 11px; padding: 2px 10px; font-weight: 600;">
+                    B2C 커머스 표준 진단
+                </span>
+            </div>
+            <div style="font-size: 16px; font-weight: 700; color: #f8fafc;">
+                {diagnosed['icon']} {diagnosed['title']}
+            </div>
+            <div style="font-size: 12px; color: #cbd5e1; margin-top: 3px;">
+                {diagnosed['description']}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     state = st.session_state.graph_state
     anchors = state.get("anchors", {})
@@ -330,7 +393,14 @@ elif st.session_state.app_phase == "HITL":
 
     # [2] 피벗: 보조 탐색 행동 (Secondary 스타일)
     with btn_col2:
-        pivot_angles = ["비용 절감 및 효율화", "리스크 선제 방어", "신규 사업 기회", "기술 역량 내재화", "경쟁사 벤치마킹"]
+        pivot_angles = [
+            "상세페이지 CVR 전환 중심",
+            "단기 프로모션 및 매출 부스팅",
+            "비용 절감 및 효율화",
+            "고객 리텐션 및 재구매 유도",
+            "타사 벤치마킹",
+            "리스크 선제 방어"
+        ]
         curr_idx = pivot_angles.index(current_angle) if current_angle in pivot_angles else 0
         new_angle = st.selectbox(
             "피벗할 앵글 선택",
@@ -378,7 +448,10 @@ elif st.session_state.app_phase == "REPORT":
     filtered_articles = state.get("filtered_articles", [])
     hypothesis = state.get("hypothesis", "")
 
-    st.header("📄 1-Page SCQA 비즈니스 전략 브리프")
+    diagnosed = st.session_state.get("diagnosed_report")
+    report_title = diagnosed["title"] if diagnosed else "1-Page SCQA 비즈니스 전략 브리프"
+
+    st.header(f"📄 {report_title}")
     st.markdown("사내 보고용 고밀도 1장 전략 보고서입니다. 상사용 핵심 지표와 권고 실행안이 요약되어 있습니다.")
 
     # 1. 상단 브리프 핵심 메트릭 카드 (Sprint 6-4)
@@ -429,7 +502,8 @@ elif st.session_state.app_phase == "REPORT":
     with act_col1:
         if st.button("🚀 Notion 전략 DB에 1-Click 내보내기", type="primary", use_container_width=True):
             with st.spinner("Notion API 연동 중 (블록 파싱 및 데이터베이스 적재)..."):
-                title = f"[전략 브리프] {hypothesis[:40] if hypothesis else '비즈니스 동향 보고서'}"
+                clean_hypo = hypothesis[:30] if hypothesis else "실행 권고안"
+                title = f"[{report_title}] {company_name} - {clean_hypo}"
                 urls = [art.get("url") for art in filtered_articles if art.get("url")]
                 
                 # Dual-Rendering: 순수 마크다운 report_text를 그대로 전달

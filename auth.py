@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 import logging
+from urllib.parse import urlparse
 from typing import Dict, Tuple, Optional
 import streamlit as st
 from dotenv import load_dotenv
@@ -10,7 +11,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
-# 하위 호환용 기본 프리셋 딕셔너리 (테스트 및 레거시 호환성 보존)
+# 1. 하위 호환 및 테스트 보존용 프로필 딕셔너리 (Zero-Regression)
 # ==============================================================================
 PRESET_PROFILES: Dict[str, dict] = {
     "SHOPPING": {
@@ -59,16 +60,16 @@ PRESET_PROFILES: Dict[str, dict] = {
 
 DEFAULT_CUSTOM_PROFILE = {
     "key": "CUSTOM",
-    "user_id": "BRAND-001",
-    "name": "실무 리드",
-    "title": "전략 담당자",
-    "company": "자사 브랜드",
-    "domain_bm": "D2C 이커머스 비즈니스",
-    "challenge": "상세페이지 전환율 극대화 및 프로모션 전략 수립",
-    "constraints": "1~2주 내 즉시 실행 가능한 전환율 최적화 중심",
+    "user_id": "STORE-001",
+    "name": "커머스 마케터",
+    "title": "실무 리드",
+    "company": "이커머스 스토어",
+    "domain_bm": "D2C 온라인 커머스 비즈니스",
+    "challenge": "상세페이지 구매 전환율(CVR) 극대화 및 프로모션 전략 수립",
+    "constraints": "단기 1~2주 내 즉각 실행 가능한 전환율 최적화 중심",
     "kpi": "상세페이지 구매 전환율(CVR) 개선 및 ROAS 극대화",
     "badge_color": "#2563EB",
-    "icon": "🏢",
+    "icon": "🛒",
 }
 
 DEFAULT_SME_FALLBACK = {
@@ -79,12 +80,12 @@ DEFAULT_SME_FALLBACK = {
 
 
 # ==============================================================================
-# 핵심 인증 및 세션 격리 함수 (Zero-Regression 보장)
+# 2. 핵심 인증 및 세션 격리 함수 (Zero-Regression 보장)
 # ==============================================================================
 def validate_employee_id(user_id: str) -> Tuple[bool, str]:
     """
-    사내 사번 규격 검증 함수 (실무형 유효성 체크)
-    - 형식: 영문 대문자 및 숫자, 하이픈 조합 3~15자리
+    사내 사번/세션 ID 규격 검증 함수 (실무형 유효성 체크)
+    - 형식: 영문 대문자, 숫자, 하이픈 조합 3~15자리
     """
     clean_id = user_id.strip().upper()
     if not clean_id:
@@ -114,25 +115,175 @@ def get_current_profile() -> dict:
 
 
 def analyze_company_profile(brand_name: str, url: str) -> dict:
-    """하위 호환용 프로파일 분석 인터페이스"""
+    """하위 호환용 프로파일 분석 래퍼"""
     return {
         "domain_bm": DEFAULT_SME_FALLBACK["domain_bm"],
         "constraints": DEFAULT_SME_FALLBACK["constraints"],
         "kpi": DEFAULT_SME_FALLBACK["kpi"],
         "is_fallback": True,
-        "message": "간편 브랜드 입력 모드 적용됨"
+        "message": "쇼핑몰 URL 기반 자동 프로파일링 적용됨"
+    }
+
+
+# ==============================================================================
+# 3. [Sprint 6-2 핵심] 이커머스 4대 표준 보고서 정의 및 자동 진단기
+# ==============================================================================
+ECOMMERCE_REPORT_TYPES: Dict[str, dict] = {
+    "CVR": {
+        "title": "상세페이지 구매 전환율(CVR) 극대화 전략 보고서",
+        "description": "상세페이지 이탈 방지, 후기/리뷰 배치, 셀링포인트 강조 및 CVR 개선",
+        "keywords": ["상세페이지", "전환율", "cvr", "후기", "리뷰", "셀링포인트", "소구점", "옵션", "이탈", "상세"],
+        "icon": "🎯",
+        "color": "#2563EB",
+    },
+    "AOV": {
+        "title": "객단가(AOV) 상승을 위한 번들 및 세트 구성 전략 보고서",
+        "description": "묶음 상품, 세트 구성, 크로스셀/업셀, 무료배송 기준 최적화",
+        "keywords": ["객단가", "aov", "번들", "묶음", "세트", "사은품", "크로스셀", "업셀", "합배송", "금액대별", "바스켓"],
+        "icon": "📦",
+        "color": "#7C3AED",
+    },
+    "ROAS": {
+        "title": "소재별 광고 효율(ROAS) 최적화 전략 보고서",
+        "description": "퍼포먼스 마케팅, 메타/인스타 광고 소재 최적화 및 광고비 대비 매출 증대",
+        "keywords": ["roas", "광고", "소재", "메타", "인스타", "퍼포먼스", "cpc", "ctr", "크리에이티브", "피드", "광고비"],
+        "icon": "📈",
+        "color": "#059669",
+    },
+    "CRM": {
+        "title": "첫 구매 고객 재구매 유도(CRM/리텐션) 전략 보고서",
+        "description": "카카오 알림톡, 재구매 쿠폰, 첫 구매 후 온보딩 및 고객 생애 가치(LTV) 극대화",
+        "keywords": ["crm", "재구매", "리텐션", "카카오", "알림톡", "쿠폰", "첫구매", "재방문", "ltv", "단골", "친구추가"],
+        "icon": "💌",
+        "color": "#D97706",
+    },
+}
+
+
+def diagnose_ecommerce_report_type(query_text: str, challenge_text: str = "") -> dict:
+    """
+    사용자의 지시문과 스토어 당면 과제를 종합 분석하여
+    4대 이커머스 표준 보고서 유형 중 가장 부합하는 정식 보고서 제목과 메타데이터를 자동 진단합니다.
+    """
+    combined_text = f"{query_text} {challenge_text}".lower()
+
+    scores = {"CVR": 0, "AOV": 0, "ROAS": 0, "CRM": 0}
+
+    for r_type, info in ECOMMERCE_REPORT_TYPES.items():
+        for kw in info["keywords"]:
+            if kw.lower() in combined_text:
+                scores[r_type] += 1
+
+    best_type = max(scores, key=scores.get)
+    if scores[best_type] == 0:
+        # 매칭 키워드가 없을 경우 가장 보편적인 CVR 극대화 보고서로 안전 폴백
+        best_type = "CVR"
+
+    target_info = ECOMMERCE_REPORT_TYPES[best_type]
+    return {
+        "type_key": best_type,
+        "title": target_info["title"],
+        "description": target_info["description"],
+        "icon": target_info["icon"],
+        "color": target_info["color"],
+    }
+
+
+# ==============================================================================
+# 4. [Sprint 6-1 핵심] 3대 이커머스 플랫폼 자동 감지 및 브랜드 안전 추출
+# ==============================================================================
+def detect_ecommerce_platform(url: str, user_brand: Optional[str] = "") -> dict:
+    """
+    URL 패턴(네이버 스마트스토어, 쿠팡, 일반 자사몰)을 0.01초 내에 감지하여
+    브랜드명이 비어 있어도 안전하게 상호를 추출하고 커머스 플랫폼 맥락을 생성합니다.
+    """
+    url_clean = url.strip()
+    brand_clean = user_brand.strip() if user_brand else ""
+
+    # 기본값 초기화
+    platform_type = "GENERAL_D2C"
+    platform_name = "독립 D2C 자사몰"
+    extracted_brand = brand_clean
+    constraints = "단기 1~2주 내 즉각 실행 가능한 자사몰 CVR 최적화 및 프로모션 중심"
+    kpi = "자사몰 상세페이지 구매 전환율(CVR) 극대화 및 광고 ROAS 개선"
+    badge_color = "#2563EB"
+    icon = "🏢"
+
+    # [케이스 1] 네이버 스마트스토어 감지
+    if "smartstore.naver.com" in url_clean:
+        platform_type = "NAVER_SMARTSTORE"
+        platform_name = "네이버 스마트스토어"
+        badge_color = "#03C75A"
+        icon = "🛍️"
+        constraints = "네이버 스마트스토어 플랫폼 환경 (네이버 쇼핑 검색 노출, 찜/알림받기, CVR 중심)"
+        kpi = "네이버 쇼핑 상위 노출 랭킹 개선 및 상세페이지 구매 전환율(CVR) 극대화"
+
+        # 브랜드명 미입력 시 URL 경로에서 스토어 ID 자동 추출
+        if not extracted_brand:
+            match = re.search(r"smartstore\.naver\.com/([a-zA-Z0-9_\-]+)", url_clean)
+            if match:
+                store_id = match.group(1).upper()
+                extracted_brand = f"스토어({store_id})"
+            else:
+                extracted_brand = "스마트스토어 입점몰"
+
+    # [케이스 2] 쿠팡 입점몰 감지
+    elif "coupang.com" in url_clean:
+        platform_type = "COUPANG"
+        platform_name = "쿠팡 마켓플레이스"
+        badge_color = "#E31A22"
+        icon = "🚀"
+        constraints = "쿠팡 오픈마켓 / 로켓그로스 환경 (아이템위너 경쟁, 썸네일/상세페이지 즉시 전환 중심)"
+        kpi = "쿠팡 구매 전환율(CVR) 개선 및 광고비 대비 매출(ROAS) 최적화"
+
+        # 브랜드명 미입력 시 안전 자동 지정
+        if not extracted_brand:
+            extracted_brand = "쿠팡 파트너몰"
+
+    # [케이스 3] 일반 독립 D2C 자사몰
+    else:
+        if not extracted_brand:
+            try:
+                # 도메인 호스트명에서 상호 추출 (예: www.xexymix.com -> XEXYMIX)
+                parsed = urlparse(url_clean if "://" in url_clean else f"https://{url_clean}")
+                host = parsed.netloc or parsed.path
+                host_parts = host.replace("www.", "").split(".")[0]
+                extracted_brand = host_parts.upper() if host_parts else "자사몰 스토어"
+            except Exception:
+                extracted_brand = "자사몰 스토어"
+
+    # 세션 사번 자동 생성 (규격: 영문+숫자+하이픈 3~15자)
+    slug = re.sub(r"[^A-Z0-9]", "", extracted_brand.upper())[:6] or "STORE"
+    if len(slug) < 3:
+        slug = f"STR{slug}"[:6]
+    auto_id = f"{slug}-{uuid.uuid4().hex[:4].upper()}"
+
+    is_valid, clean_id = validate_employee_id(auto_id)
+    if not is_valid:
+        clean_id = f"STORE-{uuid.uuid4().hex[:4].upper()}"
+
+    return {
+        "platform_type": platform_type,
+        "platform_name": platform_name,
+        "brand_name": extracted_brand,
+        "user_id": clean_id,
+        "constraints": constraints,
+        "kpi": kpi,
+        "badge_color": badge_color,
+        "icon": icon,
     }
 
 
 def render_company_id_card(profile: dict, thread_id: str) -> None:
     """
-    브랜드 / 기업 프로필 카드 컴포넌트 렌더링
+    쇼핑몰 / 스토어 프로필 카드 컴포넌트 렌더링
     """
     badge_color = profile.get("badge_color", "#2563EB")
-    company = profile.get("company", "자사 브랜드")
-    user_id = profile.get("user_id", "BRAND-001")
-    icon = profile.get("icon", "🏢")
-    challenge = profile.get("challenge", profile.get("domain_bm", "비즈니스 과제"))
+    company = profile.get("company", "자사 스토어")
+    user_id = profile.get("user_id", "STORE-001")
+    icon = profile.get("icon", "🛒")
+    platform = profile.get("platform_name", "이커머스 자사몰")
+    kpi = profile.get("kpi", "CVR 극대화")
 
     card_html = f"""
     <div style="
@@ -146,26 +297,26 @@ def render_company_id_card(profile: dict, thread_id: str) -> None:
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 6px;">
             <span style="font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #94a3b8; text-transform: uppercase;">
-                {icon} BRAND SESSION
+                {icon} {platform}
             </span>
             <span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 9999px; font-size: 10px; padding: 2px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
                 <span style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e; display: inline-block;"></span>
                 ACTIVE
             </span>
         </div>
-        <div style="margin-bottom: 10px;">
+        <div style="margin-bottom: 8px;">
             <div style="font-size: 16px; font-weight: 700; color: #f8fafc; line-height: 1.2;">
                 {company}
             </div>
-            <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
                 세션 ID: <span style="color: #38bdf8; font-family: monospace;">{user_id}</span>
             </div>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.4;">
-            <span style="color: #60a5fa; font-weight: 600;">🎯 당면 과제:</span><br>
-            {challenge[:45]}...
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.3;">
+            <span style="color: #60a5fa; font-weight: 600;">🎯 집중 KPI:</span><br>
+            {kpi[:40]}...
         </div>
     </div>
     """
@@ -173,11 +324,14 @@ def render_company_id_card(profile: dict, thread_id: str) -> None:
 
 
 # ==============================================================================
-# UI 단순화: [브랜드명] + [공식 URL] + [당면 과제] 직접 입력 사이드바
+# 4. [Sprint 6-1 UI] URL 필수 입력 + 브랜드명 선택 온보딩 사이드바
 # ==============================================================================
 def render_auth_sidebar() -> Tuple[str, str, bool]:
     """
-    사이드바: 불필요한 프리셋을 제거하고 [브랜드명] + [공식 URL] + [당면 과제]를 직접 입력받아 세션을 시작
+    쇼핑몰 온보딩 사이드바:
+    - URL: 필수 입력 (자사몰, 네이버 스마트스토어, 쿠팡 모두 지원)
+    - 브랜드명: 선택 입력 (비워두면 URL에서 상호 자동 추출)
+    - 당면 과제: 선택 입력
     """
     if "user_id" not in st.session_state:
         st.session_state.user_id = ""
@@ -189,15 +343,17 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
         st.session_state.current_profile = DEFAULT_CUSTOM_PROFILE.copy()
 
     with st.sidebar:
-        st.title("🛡️ 브랜드 컨텍스트")
-        st.caption("So-What Agent 전략 부사수")
+        st.title("🛒 쇼핑몰 온보딩")
+        st.caption("B2C 이커머스 전략 부사수")
 
         if st.session_state.is_authenticated:
-            # 인증 완료 상태: 프로필 카드 및 로그아웃 버튼
+            # ------------------------------------------------------------------
+            # [인증 완료 상태]
+            # ------------------------------------------------------------------
             profile = get_current_profile()
             render_company_id_card(profile, st.session_state.thread_id)
 
-            if st.button("🚪 세션 종료 및 브랜드 변경", use_container_width=True, type="secondary"):
+            if st.button("🚪 세션 종료 및 쇼핑몰 변경", use_container_width=True, type="secondary"):
                 st.session_state.user_id = ""
                 st.session_state.thread_id = ""
                 st.session_state.is_authenticated = False
@@ -209,77 +365,76 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
                 st.rerun()
 
         else:
-            # 미인증 상태: [브랜드명] + [공식 URL] + [당면 과제] 직접 입력
-            st.markdown("##### 🏢 분석 대상 브랜드 등록")
-            st.caption("분석할 브랜드와 주력 과제를 입력해 세션을 시작하세요.")
+            # ------------------------------------------------------------------
+            # [미인증 상태] URL 필수 + 브랜드명 선택 폼
+            # ------------------------------------------------------------------
+            st.markdown("##### 🛒 쇼핑몰 링크 등록")
+            st.caption("분석할 쇼핑몰 URL을 넣으면 플랫폼을 자동 인식합니다.")
 
-            brand_name = st.text_input(
-                "① 브랜드 / 회사명",
-                placeholder="예: 젝시믹스, 안다르, 아틀리에 패션",
-                help="자사 브랜드 또는 분석하고 싶은 기업명을 입력하세요."
+            # ① URL (필수)
+            url_input = st.text_input(
+                "① 쇼핑몰 URL (필수)",
+                placeholder="예: smartstore.naver.com/스토어명 또는 xexymix.com",
+                help="자사몰, 스마트스토어, 쿠팡 링크 모두 지원됩니다."
             )
 
-            brand_url = st.text_input(
-                "② 공식 홈페이지 URL (선택)",
-                placeholder="예: https://www.brand.co.kr",
-                help="공식 자사몰 또는 브랜드 링크입니다."
+            # ② 브랜드명 (선택)
+            brand_input = st.text_input(
+                "② 브랜드 / 상호명 (선택)",
+                placeholder="입력하지 않으면 URL에서 자동 추출됩니다",
+                help="비워두셔도 URL 경로 및 도메인에서 상호를 자동 추출합니다."
             )
 
-            brand_challenge = st.text_area(
-                "③ 당면 과제 / 주력 제품",
-                placeholder="예: 여성 요가 레깅스 자사몰 상세페이지 구매 전환율(CVR) 극대화 및 프로모션 전략",
-                height=90,
-                help="현재 풀고 싶은 핵심 실무 문제나 제품군을 구체적으로 적어주세요."
+            # ③ 당면 과제 / 주력 제품 (선택)
+            challenge_input = st.text_area(
+                "③ 당면 과제 / 주력 상품 (선택)",
+                placeholder="예: 여성 요가 레깅스 상세페이지 CVR 극대화 및 여름 프로모션",
+                height=80,
+                help="현재 풀고 싶은 핵심 실무 문제나 주력 아이템을 적어주세요."
             )
 
             if st.button("🚀 세션 생성 및 전략 분석 시작", use_container_width=True, type="primary"):
-                name_clean = brand_name.strip()
-                if not name_clean:
-                    st.warning("브랜드명을 입력해주세요.")
+                url_clean = url_input.strip()
+                if not url_clean:
+                    st.warning("⚠️ 쇼핑몰 URL을 입력해주세요 (필수 항목).")
                 else:
-                    # 브랜드명 기반 사번 생성 (규격: 3~15자 영숫자+하이픈)
-                    slug = re.sub(r"[^A-Z0-9]", "", name_clean.upper())[:6] or "BRD"
-                    if len(slug) < 3:
-                        slug = f"BRD{slug}"[:6]
-                    auto_id = f"{slug}-{uuid.uuid4().hex[:4].upper()}"
+                    with st.spinner("쇼핑몰 플랫폼 감지 및 컨텍스트 생성 중..."):
+                        # 3대 이커머스 플랫폼 자동 판별 및 상호 안전 추출
+                        meta = detect_ecommerce_platform(url_clean, brand_input)
 
-                    is_valid, clean_id = validate_employee_id(auto_id)
-                    if not is_valid:
-                        clean_id = f"BRAND-{uuid.uuid4().hex[:4].upper()}"
+                        thread_id = generate_session_thread_id(meta["user_id"])
+                        challenge_text = challenge_input.strip() or f"{meta['brand_name']} 상세페이지 전환율 개선"
 
-                    thread_id = generate_session_thread_id(clean_id)
+                        # 세션 프로필 바인딩
+                        st.session_state.user_id = meta["user_id"]
+                        st.session_state.thread_id = thread_id
+                        st.session_state.is_authenticated = True
+                        st.session_state.app_phase = "INPUT"
+                        st.session_state.graph_state = {}
+                        st.session_state.notion_url = None
 
-                    challenge_text = brand_challenge.strip() or f"{name_clean} D2C 상세페이지 전환율 개선"
-
-                    # 세션 프로필 바인딩
-                    st.session_state.user_id = clean_id
-                    st.session_state.thread_id = thread_id
-                    st.session_state.is_authenticated = True
-                    st.session_state.app_phase = "INPUT"
-                    st.session_state.graph_state = {}
-                    st.session_state.notion_url = None
-
-                    st.session_state.current_profile = {
-                        "key": "CUSTOM",
-                        "user_id": clean_id,
-                        "name": f"{name_clean} 실무 리드",
-                        "title": "전략 담당",
-                        "company": name_clean,
-                        "url": brand_url.strip(),
-                        "challenge": challenge_text,
-                        "domain_bm": challenge_text,
-                        "constraints": "단기 1~2주 내 즉각 실행 가능한 전환율 최적화 및 프로모션 중심",
-                        "kpi": "상세페이지 구매 전환율(CVR) 극대화 및 광고 ROAS 개선",
-                        "badge_color": "#2563EB",
-                        "icon": "🏢"
-                    }
-                    st.success(f"'{name_clean}' 분석 세션이 생성되었습니다!")
-                    st.rerun()
+                        st.session_state.current_profile = {
+                            "key": "CUSTOM",
+                            "user_id": meta["user_id"],
+                            "name": f"{meta['brand_name']} 마케터",
+                            "title": "실무 리드",
+                            "company": meta["brand_name"],
+                            "url": url_clean,
+                            "platform_name": meta["platform_name"],
+                            "challenge": challenge_text,
+                            "domain_bm": challenge_text,
+                            "constraints": meta["constraints"],
+                            "kpi": meta["kpi"],
+                            "badge_color": meta["badge_color"],
+                            "icon": meta["icon"],
+                        }
+                        st.success(f"'{meta['brand_name']}' ({meta['platform_name']}) 분석 세션 준비 완료!")
+                        st.rerun()
 
             st.markdown("---")
             st.markdown("""
             <div style="font-size: 11px; color: #64748b; line-height: 1.5;">
-                🔒 <b>개별 세션 격리</b>: 입력하신 브랜드 정보는 독립된 체크포인터 세션(<code>thread_id</code>)으로 보호됩니다.
+                🔒 <b>안전한 세션 격리</b>: 입력하신 쇼핑몰 데이터는 고유 체크포인터(<code>thread_id</code>)로 격리 보호됩니다.
             </div>
             """, unsafe_allow_html=True)
 

@@ -123,22 +123,22 @@ NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 streamlit run app.py
 ```
 * **브라우저 접속 후 이용 순서**:
-  1. 좌측 사이드바에서 **[⚡ 데모 프리셋]** (예: `SHOP-101 패션 D2C`) 선택 후 **[원클릭 로그인]**
-  2. 메인 화면에 상사의 거친 구두 지시문 입력 ──▶ **[🚀 팩트 수집 및 목차 생성]** 클릭
-  3. **[HITL 게이트]**에서 도출된 가설 및 SCQA 목차 검토 (인라인 수정 또는 관점 피벗)
-  4. **[✅ 목차 승인]** 클릭 ──▶ **1-Page 전략 브리프** 열람 및 **[🚀 Notion 1-Click 발행]**
+  1. 좌측 사이드바에서 **[🛒 쇼핑몰 URL]**(자사몰, 스마트스토어, 쿠팡) 입력 후 **[🚀 세션 생성 및 전략 분석 시작]** (브랜드명은 미입력 시 자동 추출)
+  2. 메인 화면에서 4대 표준 보고서 추천 예시를 참고하여 상사 지시문 입력 ──▶ **[🚀 팩트 수집 및 목차 생성]** 클릭
+  3. **[HITL 게이트]**에서 자동 진단된 정식 보고서 유형 배지, 가설 및 SCQA 목차 검토 (인라인 수정 또는 이커머스 관점 피벗)
+  4. **[✅ 목차 승인]** 클릭 ──▶ **고밀도 1장 전략 브리프 (마크다운 비교 표 포함)** 열람 및 **[🚀 Notion 1-Click 발행]**
 
 ---
 
 ## 🧪 6. 테스트 및 벤치마크 검증
 
 ```bash
-# 1. 사내 인증 및 AI 안전 폴백 검증 (Sprint 6-1)
+# 1. 쇼핑몰 URL 감지, 사번 검증 및 4대 표준 보고서 진단 (Sprint 6-1, 6-2)
 python -m unittest tests/test_auth_unit.py
 
-# 2. SME 자사 맥락 주입 통합 검증 (Sprint 6-2)
-python -m unittest tests/test_sprint6_2_integration.py
+# 2. 고밀도 1장 전략 브리프 및 Dual-Rendering 원칙 검증 (Sprint 6-4)
+python -m unittest tests/test_report_quality.py
 
-# 3. 3대 SME 도메인(쇼핑몰, SaaS, 물류) E2E 벤치마크 검증 (Sprint 6-5)
+# 3. 3대 B2C 이커머스 도메인(패션 D2C, 스마트스토어, 쿠팡) E2E 벤치마크 검증 (Sprint 6-5)
 python -m unittest tests/test_domain_benchmarks.py
 ```
