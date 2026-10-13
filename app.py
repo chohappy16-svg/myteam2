@@ -366,29 +366,73 @@ elif st.session_state.app_phase == "HITL":
 
 
 # ==============================================================================
-# [화면 4] 최종 1장 SCQA 보고서 열람 및 노션 전송 화면
+# [화면 4] 최종 1장 SCQA 전략 브리프 및 노션 연동 (Sprint 6-4)
 # ==============================================================================
 elif st.session_state.app_phase == "REPORT":
     render_stepper(4)
 
-    st.header("📄 최종 비즈니스 동향 보고서 (1-Page Brief)")
     state = st.session_state.graph_state
+    # Dual-Rendering 원칙: Notion API 전송용 순수 마크다운 원형 보존
     report_text = state.get("final_report", "생성된 보고서가 없습니다.")
+    anchors = state.get("anchors", {})
+    filtered_articles = state.get("filtered_articles", [])
+    hypothesis = state.get("hypothesis", "")
 
-    # 상단 메타 브리핑 배지
-    st.caption(f"🏢 대상 기업: **{company_name}** | 🎯 적용 앵글: **{state.get('anchors', {}).get('angle', '-')}** | 📊 팩트: **{len(state.get('filtered_articles', []))}건**")
+    st.header("📄 1-Page SCQA 비즈니스 전략 브리프")
+    st.markdown("사내 보고용 고밀도 1장 전략 보고서입니다. 상사용 핵심 지표와 권고 실행안이 요약되어 있습니다.")
 
-    # 마크다운 보고서 렌더링 카드
-    st.markdown(report_text)
+    # 1. 상단 브리프 핵심 메트릭 카드 (Sprint 6-4)
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    with m_col1:
+        st.metric("🏢 대상 기업", company_name)
+    with m_col2:
+        st.metric("📐 적용 앵글", anchors.get("angle", "비용 절감 및 효율화"))
+    with m_col3:
+        st.metric("🎯 목표 KPI", kpi_info[:16] + "..." if len(kpi_info) > 16 else kpi_info)
+    with m_col4:
+        st.metric("📊 검증 팩트", f"{len(filtered_articles)}건 기반")
+
+    # 2. 도출된 핵심 가설 (3초 인지용 콜아웃)
+    if hypothesis:
+        st.markdown(f"""
+        <div class="hypothesis-callout">
+            <b>💡 핵심 결론 (Hypothesis):</b> {hypothesis}
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 3. 마크다운 보고서 본문 렌더링 (카드 컨테이너 적용)
+    with st.container(border=True):
+        st.markdown(report_text)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 4. 원천 기사 출처(Fact URLs) 깔끔한 배지형 링크 노출 (Sprint 6-4)
+    if filtered_articles:
+        st.markdown("##### 🔗 검증된 시장 팩트 원천 기사 (출처 링크)")
+        badge_cols = st.columns(min(len(filtered_articles), 3))
+        for idx, art in enumerate(filtered_articles[:3]):
+            title = art.get("title", f"출처 기사 {idx+1}")
+            url = art.get("url", "#")
+            with badge_cols[idx % 3]:
+                st.link_button(
+                    f"📰 {title[:28]}...",
+                    url=url,
+                    use_container_width=True,
+                    help=f"{title}\n{url}"
+                )
 
     st.divider()
 
-    col_btn, col_link = st.columns([1, 2])
-    with col_btn:
-        if st.button("📤 사내 Notion 데이터베이스로 내보내기", type="primary", use_container_width=True):
-            with st.spinner("Notion API 전송 중..."):
-                title = f"[전략 브리프] {state.get('hypothesis', '비즈니스 동향 보고서')[:40]}"
-                urls = [art.get("url") for art in state.get("filtered_articles", []) if art.get("url")]
+    # 5. Notion 전략 DB 전송 및 사후 액션 바 (Dual-Rendering 원칙으로 원형 전송)
+    act_col1, act_col2, act_col3 = st.columns([2.5, 2.5, 1.5])
+
+    with act_col1:
+        if st.button("🚀 Notion 전략 DB에 1-Click 내보내기", type="primary", use_container_width=True):
+            with st.spinner("Notion API 연동 중 (블록 파싱 및 데이터베이스 적재)..."):
+                title = f"[전략 브리프] {hypothesis[:40] if hypothesis else '비즈니스 동향 보고서'}"
+                urls = [art.get("url") for art in filtered_articles if art.get("url")]
+                
+                # Dual-Rendering: 순수 마크다운 report_text를 그대로 전달
                 notion_link = export_report_to_notion(
                     title=title,
                     report_markdown=report_text,
@@ -396,17 +440,20 @@ elif st.session_state.app_phase == "REPORT":
                 )
                 if notion_link:
                     st.session_state.notion_url = notion_link
-                    st.success("✅ 노션 페이지 생성 완료!")
+                    st.success("✅ 노션 데이터베이스 페이지가 성공적으로 생성되었습니다!")
                 else:
-                    st.error("노션 전송에 실패했습니다. .env의 토큰 및 DB 설정을 확인하세요.")
+                    st.error("노션 전송에 실패했습니다. .env의 NOTION_TOKEN 및 NOTION_DATABASE_ID 설정을 확인하세요.")
 
-    with col_link:
+    with act_col2:
         if st.session_state.notion_url:
-            st.link_button("🔗 생성된 노션 페이지 열람하기", st.session_state.notion_url, use_container_width=True)
+            st.link_button("🔗 생성된 Notion 페이지 바로가기 ↗", st.session_state.notion_url, use_container_width=True)
+        else:
+            st.button("🔗 생성된 Notion 페이지 바로가기", disabled=True, use_container_width=True, help="먼저 좌측 버튼으로 노션에 내보내기를 완료해 주세요.")
 
-    if st.button("새로운 지시 분석 시작하기"):
-        st.session_state.app_phase = "INPUT"
-        st.session_state.graph_state = {}
-        st.session_state.notion_url = None
-        st.session_state.pivot_version = 0
-        st.rerun()
+    with act_col3:
+        if st.button("🔄 새 지시 분석", use_container_width=True):
+            st.session_state.app_phase = "INPUT"
+            st.session_state.graph_state = {}
+            st.session_state.notion_url = None
+            st.session_state.pivot_version = 0
+            st.rerun()
