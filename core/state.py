@@ -35,7 +35,16 @@ class AgentState(TypedDict):
 # 2. LLM Structured Output 강제용 Pydantic 스키마
 # ==============================================================================
 class ParsedAnchorOutput(BaseModel):
-    """Node 1 (Parse & Anchor) 전용 Pydantic 모델"""
+    """Node 1 (Parse & Anchor) 전용 Pydantic 모델 - 동적 미러링 및 2대 벤치마크 쿼리"""
+    background: str = Field(
+        description="사용자가 처한 상황을 품격 있는 비즈니스 문장으로 재정의 (내부 가짜 수치 날조 금지)"
+    )
+    core_challenge: str = Field(
+        description="이번 건에서 해결해야 할 실무 병목 (CVR 저하, 객단가 정체, 시즌 기획 등)"
+    )
+    research_goal: str = Field(
+        description="타사에서 무엇을 벤치마크해야 하는지 명확한 리서치 목적"
+    )
     department_kpi: str = Field(
         description="사용자 입력에서 추출되거나 기본 보정된 부서 핵심 KPI"
     )
@@ -48,8 +57,14 @@ class ParsedAnchorOutput(BaseModel):
     reporting_angle: Literal["비용 절감 및 효율화", "리스크 선제 방어", "신규 사업 기회", "기술 역량 내재화", "경쟁사 벤치마킹"] = Field(
         description="보고서의 BSC 기반 5대 핵심 앵글 중 택 1"
     )
+    search_queries: List[str] = Field(
+        description="조사 목표와 제품/카테고리를 결합한 실무 벤치마크 검색 쿼리 2개 리스트",
+        min_length=2,
+        max_length=2
+    )
     search_query: str = Field(
-        description="Tavily 검색을 위해 최적화된 비즈니스 동향 검색 키워드 문장 (1개)"
+        default="",
+        description="하위 호환용 단일 검색 쿼리"
     )
 
 
