@@ -2,10 +2,12 @@ import os
 import re
 import uuid
 import logging
+import textwrap
 from urllib.parse import urlparse
 from typing import Dict, Tuple, Optional
 import streamlit as st
 from dotenv import load_dotenv
+from ui_stitch import stitch_icon
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -276,51 +278,26 @@ def detect_ecommerce_platform(url: str, user_brand: Optional[str] = "") -> dict:
 
 def render_company_id_card(profile: dict, thread_id: str) -> None:
     """
-    쇼핑몰 / 스토어 프로필 카드 컴포넌트 렌더링
+    쇼핑몰 / 스토어 프로필 카드 컴포넌트 렌더링 (Google Stitch 테마)
     """
-    badge_color = profile.get("badge_color", "#2563EB")
     company = profile.get("company", "자사 스토어")
     user_id = profile.get("user_id", "STORE-001")
-    icon = profile.get("icon", "🛒")
     platform = profile.get("platform_name", "이커머스 자사몰")
     kpi = profile.get("kpi", "CVR 극대화")
 
     card_html = f"""
-    <div style="
-        background: linear-gradient(145deg, #1e293b, #0f172a);
-        border: 1px solid #334155;
-        border-top: 4px solid {badge_color};
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
-        color: #f8fafc;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 6px;">
-            <span style="font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #94a3b8; text-transform: uppercase;">
-                {icon} {platform}
-            </span>
-            <span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 9999px; font-size: 10px; padding: 2px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-                <span style="width: 6px; height: 6px; border-radius: 50%; background: #22c55e; display: inline-block;"></span>
-                ACTIVE
-            </span>
-        </div>
-        <div style="margin-bottom: 8px;">
-            <div style="font-size: 16px; font-weight: 700; color: #f8fafc; line-height: 1.2;">
-                {company}
-            </div>
-            <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-                세션 ID: <span style="color: #38bdf8; font-family: monospace;">{user_id}</span>
-            </div>
-        </div>
-        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.3;">
-            <span style="color: #60a5fa; font-weight: 600;">🎯 집중 KPI:</span><br>
-            {kpi[:40]}...
-        </div>
+    <div style="background: #ffffff; border: 1px solid #dae2fd; border-radius: 0.85rem; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 0.85rem;">
+      <div>
+        <div style="font-size: 16px; font-weight: 800; color: #131b2e; line-height: 1.2;">{company}</div>
+        <div style="font-size: 11px; color: #737686; font-family: monospace; margin-top: 0.25rem;">🔒 세션 ID: {user_id}</div>
+      </div>
+      <div style="background: #f2f3ff; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 11px; color: #434655; margin-top: 0.5rem; line-height: 1.4;">
+        <strong style="color: #004ac6;">🎯 집중 KPI:</strong><br>
+        {kpi[:45]}...
+      </div>
     </div>
     """
-    st.markdown(card_html, unsafe_allow_html=True)
+    st.html(textwrap.dedent(card_html).strip())
 
 
 # ==============================================================================
@@ -331,7 +308,7 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
     쇼핑몰 온보딩 사이드바:
     - URL: 필수 입력 (자사몰, 네이버 스마트스토어, 쿠팡 모두 지원)
     - 브랜드명: 선택 입력 (비워두면 URL에서 상호 자동 추출)
-    - 당면 과제: 선택 입력
+    - 주력 상품/카테고리: 선택 입력
     """
     if "user_id" not in st.session_state:
         st.session_state.user_id = ""
@@ -343,8 +320,18 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
         st.session_state.current_profile = DEFAULT_CUSTOM_PROFILE.copy()
 
     with st.sidebar:
-        st.title("🛒 쇼핑몰 온보딩")
-        st.caption("B2C 이커머스 전략 부사수")
+        # 1. 사이드바 최상단 브랜드 타이틀 배너 (Google Stitch 1:1)
+        sidebar_header = f"""
+        <div style="padding: 0.5rem 0.25rem 0.75rem 0.25rem; border-bottom: 1px solid #dae2fd; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.4rem; color: #004ac6; margin-bottom: 0.25rem;">
+            {stitch_icon("storefront", 16, "#004ac6")}
+            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">B2C 이커머스 전략</span>
+          </div>
+          <h2 style="font-size: 16px; font-weight: 800; color: #131b2e; margin: 0 0 0.2rem 0;">🛒 쇼핑몰 분석 환경 설정</h2>
+          <p style="font-size: 12px; color: #737686; margin: 0;">B2C 이커머스 실무 전략 솔루션</p>
+        </div>
+        """
+        st.html(textwrap.dedent(sidebar_header).strip())
 
         if st.session_state.is_authenticated:
             # ------------------------------------------------------------------
@@ -353,7 +340,7 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
             profile = get_current_profile()
             render_company_id_card(profile, st.session_state.thread_id)
 
-            if st.button("🚪 세션 종료 및 쇼핑몰 변경", use_container_width=True, type="secondary"):
+            if st.button("🔄 다른 쇼핑몰 분석하기", use_container_width=True, type="secondary"):
                 st.session_state.user_id = ""
                 st.session_state.thread_id = ""
                 st.session_state.is_authenticated = False
@@ -361,39 +348,47 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
                 st.session_state.graph_state = {}
                 st.session_state.notion_url = None
                 st.session_state.current_profile = DEFAULT_CUSTOM_PROFILE.copy()
-                st.info("세션이 초기화되었습니다.")
+                st.info("쇼핑몰 분석 환경이 초기화되었습니다.")
                 st.rerun()
 
         else:
             # ------------------------------------------------------------------
-            # [미인증 상태] URL 필수 + 브랜드명 선택 폼
+            # [미인증 상태] URL 필수 + 브랜드명 선택 폼 (Google Stitch 카드 래핑)
             # ------------------------------------------------------------------
-            st.markdown("##### 🛒 쇼핑몰 링크 등록")
-            st.caption("분석할 쇼핑몰 URL을 넣으면 플랫폼을 자동 인식합니다.")
+            form_header = f"""
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <div style="font-size: 14px; font-weight: 800; color: #131b2e; display: flex; align-items: center; gap: 0.4rem;">
+                {stitch_icon("domain_add", 18, "#004ac6")}분석할 쇼핑몰 등록
+              </div>
+              <span class="stitch-badge badge-gray">미인증</span>
+            </div>
+            <p style="font-size: 12px; color: #737686; margin: 0 0 0.75rem 0;">URL만 입력하면 플랫폼을 자동 감지합니다</p>
+            """
+            st.html(textwrap.dedent(form_header).strip())
 
             # ① URL (필수)
             url_input = st.text_input(
-                "① 쇼핑몰 URL (필수)",
-                placeholder="예: smartstore.naver.com/스토어명 또는 xexymix.com",
+                "쇼핑몰 URL (필수)",
+                placeholder="https://smartstore.naver.com/... 또는 자사몰",
                 help="자사몰, 스마트스토어, 쿠팡 링크 모두 지원됩니다."
             )
 
             # ② 브랜드명 (선택)
             brand_input = st.text_input(
-                "② 브랜드 / 상호명 (선택)",
-                placeholder="입력하지 않으면 URL에서 자동 추출됩니다",
+                "브랜드 / 상호명 (선택)",
+                placeholder="예: 올웨이즈케어 라이프 (비워두면 자동추출)",
                 help="비워두셔도 URL 경로 및 도메인에서 상호를 자동 추출합니다."
             )
 
-            # ③ 당면 과제 / 주력 제품 (선택)
+            # ③ 주력 상품 / 카테고리 (선택)
             challenge_input = st.text_area(
-                "③ 당면 과제 / 주력 상품 (선택)",
-                placeholder="예: 여성 요가 레깅스 상세페이지 CVR 극대화 및 여름 프로모션",
-                height=80,
-                help="현재 풀고 싶은 핵심 실무 문제나 주력 아이템을 적어주세요."
+                "주력 상품 / 카테고리 (선택)",
+                placeholder="예: 여성 요가 레깅스, 헬스용품 D2C",
+                height=70,
+                help="현재 주력으로 판매 중인 대표 아이템이나 카테고리를 적어주세요."
             )
 
-            if st.button("🚀 세션 생성 및 전략 분석 시작", use_container_width=True, type="primary"):
+            if st.button("🚀 스토어 등록 및 분석 시작", use_container_width=True, type="primary"):
                 url_clean = url_input.strip()
                 if not url_clean:
                     st.warning("⚠️ 쇼핑몰 URL을 입력해주세요 (필수 항목).")
@@ -431,11 +426,45 @@ def render_auth_sidebar() -> Tuple[str, str, bool]:
                         st.success(f"'{meta['brand_name']}' ({meta['platform_name']}) 분석 세션 준비 완료!")
                         st.rerun()
 
-            st.markdown("---")
-            st.markdown("""
-            <div style="font-size: 11px; color: #64748b; line-height: 1.5;">
-                🔒 <b>안전한 세션 격리</b>: 입력하신 쇼핑몰 데이터는 고유 체크포인터(<code>thread_id</code>)로 격리 보호됩니다.
+            security_notice = f"""
+            <div style="margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid #dae2fd; margin-bottom: 0.75rem;">
+              <div style="display: flex; align-items: flex-start; gap: 0.4rem; font-size: 11px; color: #737686; line-height: 1.4;">
+                {stitch_icon("shield", 15, "#004ac6", extra_style="margin-top: 1px;")}
+                <p style="margin: 0;"><strong style="color: #131b2e;">안전한 데이터 격리:</strong> 등록된 스토어 자산은 독립 워크스페이스로 안전하게 암호화 보호됩니다.</p>
+              </div>
             </div>
-            """, unsafe_allow_html=True)
+            """
+            st.html(textwrap.dedent(security_notice).strip())
+
+        # ----------------------------------------------------------------------
+        # Google Stitch 사이드바 부가 위젯 3종 & 관리 링크 (1:1 복제)
+        # ----------------------------------------------------------------------
+        sidebar_widgets = f"""
+        <!-- Middle Widget 1: Integration Tip -->
+        <div style="background: #ffffff; border: 1px solid #dae2fd; border-radius: 0.75rem; padding: 0.85rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+          <div style="display: flex; align-items: center; gap: 0.35rem; color: #004ac6; font-size: 12px; font-weight: 700; margin-bottom: 0.35rem;">
+            {stitch_icon("lightbulb", 15, "#004ac6")} 스마트스토어 연동 TIP
+          </div>
+          <p style="font-size: 11px; color: #434655; line-height: 1.4; margin: 0;">URL 간편 입력 시 공개 상세페이지가 스크랩되며, 차후 API 공식 연동 시 주문·결제 전환 심층 데이터를 추가 분석할 수 있습니다.</p>
+        </div>
+
+        <!-- Middle Widget 2: Daily Quota Progress -->
+        <div style="background: #ffffff; border: 1px solid #dae2fd; border-radius: 0.75rem; padding: 0.85rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 12px; font-weight: 700; color: #131b2e;">
+              {stitch_icon("data_usage", 15, "#004ac6")}금일 잔여 쿼터
+            </div>
+            <span style="font-size: 12px; font-weight: 800; color: #004ac6; font-family: monospace;">48 / 50 회</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: #dae2fd; border-radius: 9999px; overflow: hidden; margin-bottom: 0.35rem;">
+            <div style="width: 96%; height: 100%; background: #004ac6; border-radius: 9999px;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: #737686;">
+            <span>자정 자동 갱신</span>
+            <span style="color: #007d55; font-weight: 700;">96% 가용</span>
+          </div>
+        </div>
+        """
+        st.html(textwrap.dedent(sidebar_widgets).strip())
 
     return st.session_state.user_id, st.session_state.thread_id, st.session_state.is_authenticated

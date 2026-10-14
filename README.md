@@ -55,7 +55,7 @@ flowchart TD
 | :--- | :--- | :--- |
 | **Orchestration** | LangGraph, langchain-core | • 상태 머신 기반 노드 제어, 3-Way 조건부 분기, HITL 인터럽트 |
 | **Checkpointer** | MemorySaver | • 세션 격리(`thread_{user_id}_{hash}`), Time-Travel 무손실 롤백 |
-| **Frontend** | Streamlit | • 4단계 Stepper, Dynamic Key 바인딩 캐시 방지, 계층화된 3-Way 액션 바 |
+| **Frontend & UI System** | Streamlit, Custom Stitch CSS (`ui_stitch.py`) | • 4단계 Stepper, 맞춤형 디자인 토큰, 동적 프로그레스 및 반응형 카드 대시보드 |
 | **Search Engine** | Tavily Search API | • 광고/스크립트 배제 순수 비즈니스 동향 기사 고속 수집 |
 | **PR Noise Filter** | Hugging Face mDeBERTa-v3 | • 로컬 Zero-Shot 분류 (100자 슬라이싱, PR 점수 ≥ 0.5 배제) |
 | **LLM Engine** | OpenAI (gpt-4o-mini) | • Pydantic 구조화 앵커 파싱, SCQA 1-Page 마크다운 전략 보고서 작성 |
@@ -79,10 +79,12 @@ myteam2/
 │   └── graph.py          # StateGraph 조립 및 컴파일
 │
 ├── auth.py               # SME 3대 프리셋, AI 프로파일링, 세션 격리 ID
+├── ui_stitch.py          # Google Stitch 디자인 시스템, 반응형 CSS 토큰 및 UI 컴포넌트
 ├── app.py                # 엔터프라이즈 Streamlit 메인 대시보드
 │
 └── tests/                # 단위 / 통합 / 벤치마크 테스트 스위트
     ├── test_auth_unit.py              # 인증 & 안전 폴백 단위 테스트 (Phase 6)
+    ├── test_report_quality.py         # 1장 전략 브리프 및 Dual-Rendering 검증 (Phase 6)
     ├── test_sprint6_2_integration.py  # 자사 맥락 주입 통합 테스트 (Phase 6)
     ├── test_domain_benchmarks.py      # 3대 SME 도메인 E2E 벤치마크 (Phase 6)
     ├── test_pipeline_cli.py           # CLI E2E 파이프라인 테스트 (Phase 5)
